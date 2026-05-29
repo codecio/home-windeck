@@ -1,0 +1,9 @@
+# Generated logs and backups — never commit these
+logs/
+backups/
+*.log
+
+# Editor temp files
+*.tmp
+.DS_Store
+Thumbs.db
