@@ -165,10 +165,16 @@ function Backup-RegistryKey {
                      -replace '^HKCU:\\', 'HKCU\' `
                      -replace '^HKCR:\\', 'HKCR\'
 
+    # If the registry key doesn't exist, skip the reg export (reg.exe returns an error code when key missing)
+    if (-not (Test-Path $Path)) {
+        Write-Log -Level WARN -Message "Registry key '$Path' not found — skipping backup."
+        return
+    }
+
     Write-Log -Level INFO -Message "Backing up '$regPath' → $outFile"
     $result = reg export "$regPath" "$outFile" /y 2>&1
     if ($LASTEXITCODE -ne 0) {
-        Write-Log -Level WARN -Message "Registry export returned exit code $LASTEXITCODE. Key may not exist yet (backup skipped). Details: $result"
+        Write-Log -Level WARN -Message "Registry export returned exit code $LASTEXITCODE. Details: $result"
     }
 }
 
