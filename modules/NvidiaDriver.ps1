@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
     NvidiaDriver module — installs the NVIDIA graphics driver via winget.
 

@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
     Setup-SteamConsole.ps1 — transforms a Windows 11 PC into a Steam console
     experience with automatic logon, Big Picture startup, and reduced desktop

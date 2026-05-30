@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
     SteamInstall module — installs Steam via winget.
 

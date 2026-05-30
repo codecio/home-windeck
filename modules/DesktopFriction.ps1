@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
     DesktopFriction module — reduces desktop friction for a console-like experience.
 

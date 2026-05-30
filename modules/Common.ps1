@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
     Shared utilities for SteamConsoleSetup modules.
 

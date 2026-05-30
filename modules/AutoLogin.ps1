@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
     AutoLogin module — enables/disables automatic Windows logon.
 

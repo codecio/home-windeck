@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
     SteamStartup module — registers/removes a scheduled task that launches Steam
     in Big Picture mode at logon.
