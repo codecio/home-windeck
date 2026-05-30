@@ -93,12 +93,21 @@ Registry key: `HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon`
 |---|---|
 | `AutoAdminLogon` | `1` |
 | `DefaultUserName` | *your username* |
-| `DefaultPassword` | *your password (plaintext — see Safety Notes)* |
+| `DefaultPassword` | *your password (see notes below — Autologon integration encrypts credentials when available)* |
 | `AutoLogonCount` | removed (so the setting never expires) |
 
 **What it backs up** → `backups/<timestamp>_Winlogon.reg`
 
 **Revert**: sets `AutoAdminLogon=0` and removes `DefaultPassword` / `AutoLogonCount`.
+
+**Autologon integration**
+
+If `Autologon.exe` (Sysinternals) is present in `tools/` or on `PATH`, the script will prefer it and store credentials as an LSA secret instead of writing `DefaultPassword` in plaintext. To use Autologon:
+
+- Download Autologon from https://learn.microsoft.com/en-us/sysinternals/downloads/autologon (or place `Autologon.exe` in `tools/`).
+- The script will call Autologon.exe automatically when available; if it fails, it falls back to the legacy registry method.
+
+Note: LSA-encrypted autologon credentials can still be retrieved by an administrator; this is more secure than plaintext but not foolproof.
 
 ---
 

@@ -45,21 +45,53 @@ function Enable-AutoLogin {
 
     $plainPw = $null
     if (-not $script:DryRun) {
-        $password = Read-Host "Enter password for '$User' (stored in registry — see README)" -AsSecureString
+        $password = Read-Host "Enter password for '$User' (will be stored securely with Autologon if available, otherwise in registry)" -AsSecureString
         $plainPw  = [System.Runtime.InteropServices.Marshal]::PtrToStringAuto(
                         [System.Runtime.InteropServices.Marshal]::SecureStringToBSTR($password))
     }
 
     Backup-RegistryKey -Path $_WinlogonPath -Name 'Winlogon'
 
-    Invoke-Action -Description "Set AutoAdminLogon=1, DefaultUserName=$User in Winlogon" -ScriptBlock {
-        $key = $_WinlogonPath
-        Set-ItemProperty -Path $key -Name 'AutoAdminLogon'  -Value '1'      -Type String
-        Set-ItemProperty -Path $key -Name 'DefaultUserName' -Value $User    -Type String
-        Set-ItemProperty -Path $key -Name 'DefaultPassword' -Value $plainPw -Type String
-        # Clear AutoLogonCount so the setting never expires
-        Remove-ItemProperty -Path $key -Name 'AutoLogonCount' -ErrorAction SilentlyContinue
-        Write-Log -Level INFO -Message "AutoLogin enabled for '$User'. Reboot to activate."
+    # Detect Autologon.exe (tools/Autologon.exe in repo or on PATH)
+    $autologonPath = $null
+    $candidate = Join-Path $script:RepoRoot 'tools\Autologon.exe'
+    if (Test-Path $candidate) { $autologonPath = $candidate } else {
+        $cmd = Get-Command Autologon.exe -ErrorAction SilentlyContinue
+        if ($cmd) { $autologonPath = $cmd.Source }
+    }
+
+    if ($autologonPath) {
+        Invoke-Action -Description "Configure Autologon via $autologonPath for $User" -ScriptBlock {
+            if ($script:DryRun) {
+                Write-Log -Level DRY -Message "WOULD: Run $autologonPath /accepteula $User $env:COMPUTERNAME <password hidden>"
+            } else {
+                $args = @('/accepteula', $User, $env:COMPUTERNAME, $plainPw)
+                $proc = Start-Process -FilePath $autologonPath -ArgumentList $args -NoNewWindow -Wait -PassThru -ErrorAction SilentlyContinue
+                if ($proc -and $proc.ExitCode -eq 0) {
+                    Write-Log -Level INFO -Message "Autologon configured via Autologon.exe; credentials stored as LSA secret."
+                    # Ensure AutoAdminLogon and DefaultUserName set (Autologon may set these itself)
+                    Set-ItemProperty -Path $_WinlogonPath -Name 'AutoAdminLogon' -Value '1' -Type String -ErrorAction SilentlyContinue
+                    Set-ItemProperty -Path $_WinlogonPath -Name 'DefaultUserName' -Value $User -Type String -ErrorAction SilentlyContinue
+                } else {
+                    Write-Log -Level WARN -Message "Autologon.exe failed (exit $($proc.ExitCode)); falling back to registry DefaultPassword."
+                    Set-ItemProperty -Path $_WinlogonPath -Name 'AutoAdminLogon'  -Value '1'      -Type String
+                    Set-ItemProperty -Path $_WinlogonPath -Name 'DefaultUserName' -Value $User    -Type String
+                    Set-ItemProperty -Path $_WinlogonPath -Name 'DefaultPassword' -Value $plainPw -Type String
+                }
+                Remove-ItemProperty -Path $_WinlogonPath -Name 'AutoLogonCount' -ErrorAction SilentlyContinue
+                Write-Log -Level INFO -Message "AutoLogin enabled for '$User'. Reboot to activate."
+            }
+        }
+    } else {
+        Invoke-Action -Description "Set AutoAdminLogon=1, DefaultUserName=$User in Winlogon" -ScriptBlock {
+            $key = $_WinlogonPath
+            Set-ItemProperty -Path $key -Name 'AutoAdminLogon'  -Value '1'      -Type String
+            Set-ItemProperty -Path $key -Name 'DefaultUserName' -Value $User    -Type String
+            Set-ItemProperty -Path $key -Name 'DefaultPassword' -Value $plainPw -Type String
+            # Clear AutoLogonCount so the setting never expires
+            Remove-ItemProperty -Path $key -Name 'AutoLogonCount' -ErrorAction SilentlyContinue
+            Write-Log -Level INFO -Message "AutoLogin enabled for '$User'. Reboot to activate."
+        }
     }
 }
 
@@ -72,6 +104,33 @@ function Disable-AutoLogin {
     param()
 
     Backup-RegistryKey -Path $_WinlogonPath -Name 'Winlogon'
+
+    # If Autologon.exe is available, attempt to disable it first
+    $autologonPath = $null
+    $candidate = Join-Path $script:RepoRoot 'tools\Autologon.exe'
+    if (Test-Path $candidate) { $autologonPath = $candidate } else {
+        $cmd = Get-Command Autologon.exe -ErrorAction SilentlyContinue
+        if ($cmd) { $autologonPath = $cmd.Source }
+    }
+
+    if ($autologonPath) {
+        Invoke-Action -Description "Disable Autologon via $autologonPath" -ScriptBlock {
+            if ($script:DryRun) {
+                Write-Log -Level DRY -Message "WOULD: Run $autologonPath /delete"
+            } else {
+                try {
+                    $proc = Start-Process -FilePath $autologonPath -ArgumentList '/delete' -NoNewWindow -Wait -PassThru -ErrorAction SilentlyContinue
+                    if ($proc -and $proc.ExitCode -eq 0) {
+                        Write-Log -Level INFO -Message 'Autologon disabled via Autologon.exe.'
+                    } else {
+                        Write-Log -Level WARN -Message 'Autologon.exe did not report success — continuing with registry cleanup.'
+                    }
+                } catch {
+                    Write-Log -Level WARN -Message "Failed to run Autologon.exe: $_"
+                }
+            }
+        }
+    }
 
     Invoke-Action -Description 'Remove AutoAdminLogon, DefaultUserName, DefaultPassword from Winlogon' -ScriptBlock {
         $key = $_WinlogonPath

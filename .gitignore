@@ -3,6 +3,9 @@ logs/
 backups/
 *.log
 
+# Tools and binaries
+tools/
+
 # Editor temp files
 *.tmp
 .DS_Store
