@@ -1,43 +1,74 @@
-# SteamConsoleSetup — Sysadmin-style guide
+# Home-WinDeck
 
-This toolkit turns a Windows 11 box into a couch-friendly Steam console: autologin, Steam Big Picture at logon, and power tweaks to keep the machine awake. Designed for a single-purpose living-room PC — admin-controlled, reversible.
+A sysadmin-style reference and quick guide for converting a Windows 11 machine into a Steam-first console. Focuses on reliable, reversible changes that are safe for home use.
 
-Quick start (do this first)
+Table of contents
 
-1. Open an elevated PowerShell prompt.
-2. Run a dry-run to preview changes:  .\Setup-SteamConsole.ps1 -DryRun
-3. Run for real:  .\Setup-SteamConsole.ps1
-4. Reboot and verify (see checks below).
+- Quick start
+- Modules (summary)
+- Safety & backups
+- Post-reboot verification
+- Troubleshooting
+- Roadmap
 
-What runs by default
+Quick start
 
-- AutoLogin (uses Sysinternals Autologon when available; falls back to registry)
-- SteamInstall (winget Valve.Steam)
-- SteamStartup (schtasks -> steam.exe -bigpicture -silent)
-- DesktopFriction (disables the full lock-screen overlay)
-- PowerTweaks (sets never-sleep / never-display-off)
+| Action | Command |
+|---|---|
+| Preview (no changes) | .\Setup-SteamConsole.ps1 -DryRun |
+| Apply defaults | .\Setup-SteamConsole.ps1 |
+| Revert defaults | .\Setup-SteamConsole.ps1 -Revert |
+| Apply specific modules | .\Setup-SteamConsole.ps1 -Modules AutoLogin,SteamStartup -User gamer |
 
-Notes & warnings (read this)
+Modules (summary)
 
-- AutoLogin stores credentials: we prefer Autologon.exe (LSA secret). If unavailable the script writes DefaultPassword to HKLM\...\Winlogon (backed up). Local admins can still recover secrets.
-- NVIDIA driver install is opt-in and may require reboot; uninstall is manual and destructive to game libraries if done carelessly.
-- Backups and logs: backups/ and logs/ are created (ignored by git). Use them to roll back.
+| Module | Purpose | Changes | Revert |
+|---|---|---|---|
+| AutoLogin | Auto sign-in at boot | Prefers Sysinternals Autologon (stores LSA secret). If unavailable, writes DefaultPassword to `HKLM\\...\\Winlogon` (backed up). | Disable-AutoLogin / `.\Setup-SteamConsole.ps1 -Revert` |
+| SteamInstall | Install Steam | `winget install --id Valve.Steam` (idempotent) | Manual uninstall (advisory) |
+| SteamStartup | Auto-launch Steam Big Picture | Creates `Home-WinDeck-BigPictureAutostart` via `schtasks` | `.\Setup-SteamConsole.ps1 -Revert` |
+| DesktopFriction | Remove full-screen lock overlay | Sets policy `NoLockScreen=1` at `HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows\\Personalization` | `.\Setup-SteamConsole.ps1 -Revert` |
+| PowerTweaks | Console power profile | Activates a high-perf-like scheme, disables hibernate, sets never-display/never-sleep | Disable-PowerTweaks (restores previous scheme) |
+| NvidiaDriver (opt-in) | GPU driver install | Installs `Nvidia.GraphicsDriver` via winget (requires `-Yes`) | Manual uninstall (advisory) |
 
-Post-reboot quick checks
+Safety & backups
 
-Run these to validate the setup:
+- All registry keys the script touches are exported to `backups/` before modification.
+- The script writes a transcript to `logs/` (both paths are in `.gitignore`).
+- Use `-DryRun` to preview actions before they change the system.
+- Autologon: script will download Autologon.zip from Sysinternals into `tools/` by default and use it to store credentials as an LSA secret. If that fails, the registry fallback is used (with backup).
+- LSA-stored secrets are better than plaintext but can still be retrieved by a local admin.
 
-Get-ScheduledTask -TaskName 'SteamConsoleSetup-BigPictureAutostart' | Format-List *
-schtasks /Query /TN "SteamConsoleSetup-BigPictureAutostart" /XML
-reg query "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon"
+Post-reboot verification (commands)
+
+```powershell
+# Task
+Get-ScheduledTask -TaskName 'Home-WinDeck-BigPictureAutostart' | Format-List *
+# Task XML
+schtasks /Query /TN "Home-WinDeck-BigPictureAutostart" /XML
+# Winlogon entries
+reg query "HKLM\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Winlogon"
+# Power schemes
 powercfg /L
+powercfg /query
+```
 
-Reverting
+Troubleshooting (short)
 
-To undo changes:  .\Setup-SteamConsole.ps1 -Revert
+- `winget` missing → install App Installer from Microsoft Store.
+- Steam not launching via task → run Steam manually once; check Task Scheduler history.
+- `schtasks` errors → check logs in `logs/` and `schtasks /Query` output.
 
-If you need a surgical rollback, import the .reg files from backups/ with reg import.
+Roadmap
 
-If you want cleaner controller support outside Steam, consider DS4Windows (ViGEm) for system-wide mapping; otherwise use Steam Input in Big Picture.
+- Controller helpers: Steam Input presets, DS4Windows guidance
+- PowerTweaks refinements (multimedia rules, USB selective suspend)
+- CI (PSScriptAnalyzer) & tests
 
-Want me to push these README edits and tag a release? Or run the reboot+verify step now and capture logs?
+License
+
+No license file included — contact the repository owner.
+
+---
+
+If you want expanded module docs or an operator checklist, say which module and I'll generate a focused markdown file.
