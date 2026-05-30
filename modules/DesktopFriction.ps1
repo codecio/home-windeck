@@ -31,10 +31,16 @@ function Disable-LockScreen {
 
     Invoke-Action -Description 'Create Personalization policy key and set NoLockScreen=1' -ScriptBlock {
         if (-not (Test-Path $_PersonalizationPath)) {
-            New-Item -Path $_PersonalizationPath -Force | Out-Null
+            New-Item -Path $_PersonalizationPath -Force -ErrorAction SilentlyContinue | Out-Null
         }
-        Set-ItemProperty -Path $_PersonalizationPath -Name 'NoLockScreen' -Value 1 -Type DWord
-        Write-Log -Level INFO -Message 'Lock screen disabled. Changes take effect at next logon.'
+        try {
+            Set-ItemProperty -Path $_PersonalizationPath -Name 'NoLockScreen' -Value 1 -Type DWord -ErrorAction Stop
+            Write-Log -Level INFO -Message 'Lock screen disabled. Changes take effect at next logon.'
+        }
+        catch {
+            Write-Log -Level ERROR -Message "Failed to set NoLockScreen: $_"
+            throw
+        }
     }
 }
 
@@ -49,11 +55,17 @@ function Enable-LockScreen {
     Backup-RegistryKey -Path $_PersonalizationPath -Name 'Personalization'
 
     Invoke-Action -Description 'Remove NoLockScreen from Personalization policy key' -ScriptBlock {
-        if (Test-Path $_PersonalizationPath) {
-            Remove-ItemProperty -Path $_PersonalizationPath -Name 'NoLockScreen' -ErrorAction SilentlyContinue
-            Write-Log -Level INFO -Message 'Lock screen re-enabled. Changes take effect at next logon.'
-        } else {
-            Write-Log -Level INFO -Message 'Personalization policy key not found — lock screen already at default.'
+        try {
+            if (Test-Path $_PersonalizationPath) {
+                Remove-ItemProperty -Path $_PersonalizationPath -Name 'NoLockScreen' -ErrorAction SilentlyContinue
+                Write-Log -Level INFO -Message 'Lock screen re-enabled. Changes take effect at next logon.'
+            } else {
+                Write-Log -Level INFO -Message 'Personalization policy key not found — lock screen already at default.'
+            }
+        }
+        catch {
+            Write-Log -Level ERROR -Message "Failed to remove NoLockScreen: $_"
+            throw
         }
     }
 }
