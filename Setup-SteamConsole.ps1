@@ -127,8 +127,8 @@ if (-not $script:DryRun) { Assert-Administrator }
 
 #region ── Module selection ─────────────────────────────────────────────────────
 
-$validModules   = @('AutoLogin','SteamInstall','SteamStartup','NvidiaDriver','DesktopFriction')
-$defaultModules = @('AutoLogin','SteamInstall','SteamStartup','DesktopFriction')
+$validModules   = @('AutoLogin','SteamInstall','SteamStartup','NvidiaDriver','DesktopFriction','PowerTweaks')
+$defaultModules = @('AutoLogin','SteamInstall','SteamStartup','DesktopFriction','PowerTweaks')
 
 if (-not $Modules -or $Modules.Count -eq 0) {
     $selectedModules = $defaultModules
@@ -161,6 +161,7 @@ $dispatch = @{
     SteamStartup   = @{ Enable = { Register-SteamStartupTask -User $User }; Disable = { Unregister-SteamStartupTask } }
     NvidiaDriver   = @{ Enable = { Install-NvidiaDriver -Yes:$Yes };      Disable = { Uninstall-NvidiaDriver } }
     DesktopFriction= @{ Enable = { Disable-LockScreen };                  Disable = { Enable-LockScreen  } }
+    PowerTweaks     = @{ Enable = { Enable-PowerTweaks };                  Disable = { Disable-PowerTweaks } }
 }
 
 #endregion
