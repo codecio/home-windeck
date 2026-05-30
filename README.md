@@ -12,6 +12,8 @@ Turn a Windows 11 PC into a couch-friendly Steam console experience — automati
 | **DesktopFriction** | Sets the `NoLockScreen` Group Policy DWORD to bypass the lock screen on wake/boot |
 | **NvidiaDriver** *(opt-in)* | Installs `Nvidia.GraphicsDriver` via `winget` |
 
+Note: PowerTweaks is now included by default and will set a "never sleep / never turn off display" power profile suitable for a console-like, always-on experience. The Steam startup task is created using schtasks.exe for compatibility (Register-ScheduledTask can fail on some systems). NVIDIA driver installation remains opt-in and requires explicit confirmation via `-Yes`.
+
 ### Non-goals
 
 - ❌ No shell replacement (no kiosk mode, no removing Explorer)
@@ -75,7 +77,7 @@ Everything is user-consent driven, backed up before any registry change, and ful
 | `-LogPath` | `string` | `logs\<timestamp>.log` | Override log file path |
 | `-Yes` | switch | — | Skip confirmation prompts (e.g., NvidiaDriver) |
 
-**Default modules** (when `-Modules` is not specified): `AutoLogin`, `SteamInstall`, `SteamStartup`, `DesktopFriction`
+**Default modules** (when `-Modules` is not specified): `AutoLogin`, `SteamInstall`, `SteamStartup`, `DesktopFriction`, `PowerTweaks`
 
 ---
 
@@ -229,6 +231,20 @@ If Steam was installed outside the default path, run `Install-Steam` (or install
 ### Script exits immediately with "must be run as Administrator"
 
 Right-click PowerShell → **Run as Administrator**, `cd` to the repo folder, then run the script. Or use `-DryRun` to preview without elevation.
+
+
+### Post-reboot verification
+
+After a reboot, run these commands to verify AutoLogin, the scheduled task, and power state:
+
+```powershell
+Get-ScheduledTask -TaskName 'SteamConsoleSetup-BigPictureAutostart' | Format-List *
+schtasks /Query /TN "SteamConsoleSetup-BigPictureAutostart" /XML
+schtasks /Run /TN "SteamConsoleSetup-BigPictureAutostart"
+reg query "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon"
+powercfg /L
+powercfg /query
+```
 
 ---
 
