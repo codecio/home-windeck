@@ -105,7 +105,7 @@ function Disable-PowerTweaks {
                     powercfg -setactive $prev | Out-Null
                     Write-Log -Level INFO -Message "Restored previous power scheme $prev from $($meta.Name)."
                 } catch {
-                    Write-Log -Level WARN -Message ("Failed to restore previous scheme $prev: $($_)")
+                    Write-Log -Level WARN -Message ("Failed to restore previous scheme {0}: {1}" -f $prev, $_)
                 }
             }
         }
