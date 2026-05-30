@@ -102,10 +102,9 @@ Registry key: `HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon`
 
 **Autologon integration**
 
-If `Autologon.exe` (Sysinternals) is present in `tools/` or on `PATH`, the script will prefer it and store credentials as an LSA secret instead of writing `DefaultPassword` in plaintext. To use Autologon:
+The script prefers Sysinternals `Autologon.exe` and will store credentials as an LSA secret (more secure than writing `DefaultPassword` in plaintext). If `Autologon.exe` is not present, the script will attempt to download `AutoLogon.zip` from the official Sysinternals URL into `tools/` and extract `Autologon.exe` automatically. You can opt out by placing `Autologon.exe` yourself in `tools/` or installing it on `PATH`.
 
-- Download Autologon from https://learn.microsoft.com/en-us/sysinternals/downloads/autologon (or place `Autologon.exe` in `tools/`).
-- The script will call Autologon.exe automatically when available; if it fails, it falls back to the legacy registry method.
+If Autologon is unavailable or the download fails, the script falls back to the legacy registry method and writes `DefaultPassword` (backups are created first).
 
 Note: LSA-encrypted autologon credentials can still be retrieved by an administrator; this is more secure than plaintext but not foolproof.
 

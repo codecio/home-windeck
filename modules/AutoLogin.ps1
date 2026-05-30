@@ -52,12 +52,39 @@ function Enable-AutoLogin {
 
     Backup-RegistryKey -Path $_WinlogonPath -Name 'Winlogon'
 
-    # Detect Autologon.exe (tools/Autologon.exe in repo or on PATH)
+    # Detect or download Autologon.exe (tools/Autologon.exe in repo or on PATH). If missing, download by default.
     $autologonPath = $null
-    $candidate = Join-Path $script:RepoRoot 'tools\Autologon.exe'
+    $toolsDir = Join-Path $script:RepoRoot 'tools'
+    $candidate = Join-Path $toolsDir 'Autologon.exe'
     if (Test-Path $candidate) { $autologonPath = $candidate } else {
         $cmd = Get-Command Autologon.exe -ErrorAction SilentlyContinue
         if ($cmd) { $autologonPath = $cmd.Source }
+    }
+
+    if (-not $autologonPath) {
+        $downloadUrl = 'https://download.sysinternals.com/files/AutoLogon.zip'
+        $zipPath = Join-Path $toolsDir 'AutoLogon.zip'
+
+        if ($script:DryRun) {
+            Write-Log -Level DRY -Message "WOULD: Download Autologon from $downloadUrl to $zipPath and extract to $toolsDir"
+        } else {
+            try {
+                if (-not (Test-Path $toolsDir)) { New-Item -ItemType Directory -Path $toolsDir | Out-Null }
+                Write-Log -Level INFO -Message "Downloading Autologon from $downloadUrl → $zipPath"
+                Invoke-WebRequest -Uri $downloadUrl -OutFile $zipPath -ErrorAction Stop
+                Expand-Archive -LiteralPath $zipPath -DestinationPath $toolsDir -Force -ErrorAction Stop
+                Remove-Item -Path $zipPath -Force -ErrorAction SilentlyContinue
+                $autologonCandidate = Join-Path $toolsDir 'Autologon.exe'
+                if (Test-Path $autologonCandidate) {
+                    $autologonPath = $autologonCandidate
+                    Write-Log -Level INFO -Message "Autologon.exe downloaded to $autologonPath"
+                } else {
+                    Write-Log -Level WARN -Message 'Downloaded archive did not contain Autologon.exe; falling back to registry method.'
+                }
+            } catch {
+                Write-Log -Level WARN -Message "Failed to download or extract Autologon.exe: $_. Falling back to registry method."
+            }
+        }
     }
 
     if ($autologonPath) {
