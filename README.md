@@ -1,6 +1,6 @@
 # Home-WinDeck
 
-A sysadmin-style reference and quick guide for converting a Windows 11 machine into a Steam-first console. Focuses on reliable, reversible changes that are safe for home use.
+A reference and quick guide for converting a Windows 11 machine into a Steam-first console. Focuses on reliable, reversible changes that are safe for home use.
 
 Table of contents
 
