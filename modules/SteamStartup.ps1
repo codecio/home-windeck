@@ -61,40 +61,18 @@ function Register-SteamStartupTask {
     if (-not $steamExe) { $steamExe = 'C:\Program Files (x86)\Steam\steam.exe' }
 
     Invoke-Action -Description "Register scheduled task '$_TaskName' for user '$User' (steam.exe -bigpicture -silent)" -ScriptBlock {
-        $trigger   = New-ScheduledTaskTrigger -AtLogOn -User $User
-        $action    = New-ScheduledTaskAction  -Execute $steamExe -Argument '-bigpicture -silent'
-        $settings  = New-ScheduledTaskSettingsSet -ExecutionTimeLimit (New-TimeSpan -Seconds 0) `
-                                                   -MultipleInstances IgnoreNew
-
-        # Qualify user name to MACHINE\User if needed
+        # Use schtasks.exe to create the task (portable and avoids Register-ScheduledTask parameter issues)
+        $tr = "`"$steamExe`" -bigpicture -silent"
         if ($User -match '\\') { $userId = $User } else { $userId = "$env:COMPUTERNAME\$User" }
 
-        try {
-            # Try the native Register-ScheduledTask with -User/-RunLevel first
-            Register-ScheduledTask -TaskName $_TaskName `
-                                   -Trigger   $trigger   `
-                                   -Action    $action    `
-                                   -Settings  $settings  `
-                                   -User      $userId    `
-                                   -RunLevel  'Limited'  `
-                                   -Force | Out-Null
-
-            Write-Log -Level INFO -Message "Scheduled task '$_TaskName' registered. Steam Big Picture will start at next logon for '$User'."
-        }
-        catch {
-            Write-Log -Level WARN -Message "Register-ScheduledTask failed: $_. Attempting schtasks.exe fallback..."
-
-            # Fallback to schtasks.exe which tends to accept MACHINE\User
-            $tr = "`"$steamExe`" -bigpicture -silent"
-            $args = @('/Create','/TN',$_TaskName,'/TR',$tr,'/SC','ONLOGON','/RU',$userId,'/F')
-            $proc = Start-Process -FilePath 'schtasks.exe' -ArgumentList $args -NoNewWindow -Wait -PassThru -ErrorAction SilentlyContinue
-            if ($proc -and $proc.ExitCode -eq 0) {
-                Write-Log -Level INFO -Message "Scheduled task '$_TaskName' created via schtasks.exe fallback."
-            } else {
-                $out = if ($proc) { "ExitCode=$($proc.ExitCode)" } else { 'Start-Process failed' }
-                Write-Log -Level ERROR -Message "schtasks.exe fallback failed: $out"
-                throw
-            }
+        $args = @('/Create','/TN',$_TaskName,'/TR',$tr,'/SC','ONLOGON','/RU',$userId,'/F')
+        $proc = Start-Process -FilePath 'schtasks.exe' -ArgumentList $args -NoNewWindow -Wait -PassThru -ErrorAction SilentlyContinue
+        if ($proc -and $proc.ExitCode -eq 0) {
+            Write-Log -Level INFO -Message "Scheduled task '$_TaskName' created via schtasks.exe."
+        } else {
+            $out = if ($proc) { "ExitCode=$($proc.ExitCode)" } else { 'Start-Process failed' }
+            Write-Log -Level ERROR -Message "schtasks.exe failed to create task: $out"
+            throw
         }
     }
 }
