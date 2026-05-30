@@ -77,7 +77,9 @@ param(
 
     [string]   $LogPath,
 
-    [switch]   $Yes
+    [switch]   $Yes,
+
+    [string]   $Wallpaper
 )
 
 Set-StrictMode -Version Latest
@@ -150,6 +152,44 @@ Write-Log -Level INFO -Message "Mode     : $($PSCmdlet.ParameterSetName.ToUpper(
 Write-Log -Level INFO -Message "Modules  : $($selectedModules -join ', ')"
 Write-Log -Level INFO -Message "User     : $User"
 Write-Log -Level INFO -Message "Log file : $($script:LogFile)"
+
+# Handle wallpaper parameter (manual one-shot action)
+if (-not $Revert -and $PSBoundParameters.ContainsKey('Wallpaper') -and $Wallpaper) {
+    Write-Log -Level INFO -Message "Wallpaper parameter provided: $Wallpaper"
+
+    if (-not (Test-Path -Path $Wallpaper)) {
+        Write-Log -Level ERROR -Message "Wallpaper file not found: $Wallpaper"
+        Stop-Transcript -ErrorAction SilentlyContinue | Out-Null
+        exit 1
+    }
+
+    # Prevent the main loop from flipping NoLockScreen back to '1' by removing DesktopFriction
+    if ($selectedModules -contains 'DesktopFriction') {
+        Write-Log -Level WARN -Message "Removing DesktopFriction from module list to avoid conflicting NoLockScreen changes when applying wallpaper."
+        $selectedModules = $selectedModules | Where-Object { $_ -ne 'DesktopFriction' }
+    }
+
+    try {
+        Set-LockScreenWallpaper -ImagePath $Wallpaper
+        Write-Log -Level INFO -Message "Applied lock screen wallpaper: $Wallpaper"
+
+        # Ensure lock screen is enabled so the image is visible
+        try {
+            Enable-LockScreen
+            Write-Log -Level INFO -Message 'Ensured lock screen is enabled (NoLockScreen removed) so wallpaper will display.'
+        }
+        catch {
+            Write-Log -Level WARN -Message "Failed to ensure lock screen enabled: $_"
+        }
+    }
+    catch {
+        Write-Log -Level ERROR -Message "Failed to apply wallpaper: $_"
+        Stop-Transcript -ErrorAction SilentlyContinue | Out-Null
+        exit 1
+    }
+
+    Write-Log -Level INFO -Message "Continuing with remaining modules: $($selectedModules -join ', ')"
+}
 
 #endregion
 
