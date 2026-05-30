@@ -65,12 +65,21 @@ function Register-SteamStartupTask {
         $tr = "`"$steamExe`" -bigpicture -silent"
         if ($User -match '\\') { $userId = $User } else { $userId = "$env:COMPUTERNAME\$User" }
 
-        $args = @('/Create','/TN',$_TaskName,'/TR',$tr,'/SC','ONLOGON','/RU',$userId,'/F')
-        $proc = Start-Process -FilePath 'schtasks.exe' -ArgumentList $args -NoNewWindow -Wait -PassThru -ErrorAction SilentlyContinue
+        # Build a single argument string to preserve the /TR value with inner quotes
+        $trQuoted = '"' + $steamExe + ' -bigpicture -silent' + '"'
+        $argString = "/Create /TN `"$($_TaskName)`" /TR $trQuoted /SC ONLOGON /RU `"$userId`" /F"
+
+        $proc = Start-Process -FilePath 'schtasks.exe' -ArgumentList $argString -NoNewWindow -Wait -PassThru -ErrorAction SilentlyContinue
         if ($proc -and $proc.ExitCode -eq 0) {
             Write-Log -Level INFO -Message "Scheduled task '$_TaskName' created via schtasks.exe."
         } else {
-            $out = if ($proc) { "ExitCode=$($proc.ExitCode)" } else { 'Start-Process failed' }
+            # Attempt to capture standard output by running schtasks synchronously with & and redirecting
+            try {
+                $output = schtasks.exe /Create /TN "$_TaskName" /TR "$steamExe -bigpicture -silent" /SC ONLOGON /RU "$userId" /F 2>&1
+            } catch {
+                $output = "schtasks invocation failed"
+            }
+            $out = if ($proc) { "ExitCode=$($proc.ExitCode); Output=$($output -join ' | ')" } else { "Start-Process failed; Output=$($output -join ' | ')" }
             Write-Log -Level ERROR -Message "schtasks.exe failed to create task: $out"
             throw
         }
