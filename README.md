@@ -41,6 +41,13 @@ Examples:
 |---|---|
 | Set image | Set-LockScreenWallpaper -ImagePath 'C:\\path\\to\\image.jpg' |
 | Remove image | Remove-LockScreenWallpaper |
+| Test (dry-run) | .\\Setup-SteamConsole.ps1 -DryRun -Modules DesktopFriction |
+
+Accepted formats & recommendations:
+
+- Formats: JPEG, JPG, PNG, BMP
+- Recommended resolution: match the display resolution (e.g., 1920x1080). For multi-monitor setups, prefer an image sized for the primary display.
+- Recommended maximum file size: ~5 MB to avoid slow policy application or copy failures.
 
 Notes:
 - The image is copied to C:\\ProgramData\\Home-WinDeck\\LockScreen and the policy value `LockScreenImage` is set under `HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows\\Personalization` (backed up before change).
