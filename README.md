@@ -1,4 +1,4 @@
-# SteamConsoleSetup — minimal nerdy admin guide
+# SteamConsoleSetup — Sysadmin-style guide
 
 This toolkit turns a Windows 11 box into a couch-friendly Steam console: autologin, Steam Big Picture at logon, and power tweaks to keep the machine awake. Designed for a single-purpose living-room PC — admin-controlled, reversible.
 
