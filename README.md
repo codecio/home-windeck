@@ -65,10 +65,3 @@ Roadmap
 - PowerTweaks refinements (multimedia rules, USB selective suspend)
 - CI (PSScriptAnalyzer) & tests
 
-License
-
-No license file included — contact the repository owner.
-
----
-
-If you want expanded module docs or an operator checklist, say which module and I'll generate a focused markdown file.
