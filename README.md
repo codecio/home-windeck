@@ -31,6 +31,23 @@ Modules (summary)
 | PowerTweaks | Console power profile | Activates a high-perf-like scheme, disables hibernate, sets never-display/never-sleep | Disable-PowerTweaks (restores previous scheme) |
 | NvidiaDriver (opt-in) | GPU driver install | Installs `Nvidia.GraphicsDriver` via winget (requires `-Yes`) | Manual uninstall (advisory) |
 
+Lock screen wallpaper (manual)
+
+You can set a custom lock screen wallpaper manually using the DesktopFriction module.
+
+Examples:
+
+| Action | Command |
+|---|---|
+| Set image | Set-LockScreenWallpaper -ImagePath 'C:\\path\\to\\image.jpg' |
+| Remove image | Remove-LockScreenWallpaper |
+
+Notes:
+- The image is copied to C:\\ProgramData\\Home-WinDeck\\LockScreen and the policy value `LockScreenImage` is set under `HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows\\Personalization` (backed up before change).
+- Changes take effect after a policy refresh or at next logon.
+- These functions respect DryRun when invoked via Setup-SteamConsole.
+
+
 Safety & backups
 
 - All registry keys the script touches are exported to `backups/` before modification.
