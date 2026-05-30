@@ -69,3 +69,91 @@ function Enable-LockScreen {
         }
     }
 }
+
+function Set-LockScreenWallpaper {
+    <#
+    .SYNOPSIS
+        Sets a custom lock screen wallpaper via the Personalization policy (LockScreenImage).
+
+    .DESCRIPTION
+        Copies the provided image into C:\ProgramData\Home-WinDeck\LockScreen and sets
+        the `LockScreenImage` policy value under HKLM:\SOFTWARE\Policies\Microsoft\Windows\Personalization.
+
+        This is a manual action (not performed by default) and is reversible via
+        Remove-LockScreenWallpaper. The registry key is backed up before changes.
+    #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory=$true, Position=0)]
+        [string] $ImagePath,
+
+        [string] $DestinationRoot = 'C:\ProgramData\Home-WinDeck\LockScreen'
+    )
+
+    if (-not (Test-Path -Path $ImagePath)) {
+        Write-Log -Level ERROR -Message "Image not found: $ImagePath"
+        return
+    }
+
+    Backup-RegistryKey -Path $_PersonalizationPath -Name 'LockScreenImage'
+
+    $destDir = $DestinationRoot
+    $ext = [IO.Path]::GetExtension($ImagePath)
+    $destFile = Join-Path $destDir ("lockscreen" + $ext)
+
+    Invoke-Action -Description "Copy image and set LockScreenImage policy to '$destFile'" -ScriptBlock {
+        try {
+            if (-not (Test-Path -Path $destDir)) { New-Item -ItemType Directory -Path $destDir -Force | Out-Null }
+            Copy-Item -Path $ImagePath -Destination $destFile -Force -ErrorAction Stop
+            Set-ItemProperty -Path $_PersonalizationPath -Name 'LockScreenImage' -Value $destFile -Type String -ErrorAction Stop
+            Write-Log -Level INFO -Message "Lock screen image set to $destFile. Changes take effect after policy refresh or next logon."
+        }
+        catch {
+            Write-Log -Level ERROR -Message "Failed to set lock screen image: $_"
+            throw
+        }
+    }
+}
+
+function Remove-LockScreenWallpaper {
+    <#
+    .SYNOPSIS
+        Removes the LockScreenImage policy value and cleans up the copied image file.
+    #>
+    [CmdletBinding()]
+    param()
+
+    Backup-RegistryKey -Path $_PersonalizationPath -Name 'LockScreenImage'
+
+    Invoke-Action -Description 'Remove LockScreenImage policy and cleanup copied file' -ScriptBlock {
+        try {
+            if (Test-Path $_PersonalizationPath) {
+                $existing = (Get-ItemProperty -Path $_PersonalizationPath -Name 'LockScreenImage' -ErrorAction SilentlyContinue).LockScreenImage
+                if ($existing) {
+                    Remove-ItemProperty -Path $_PersonalizationPath -Name 'LockScreenImage' -ErrorAction SilentlyContinue
+                    Write-Log -Level INFO -Message 'Removed LockScreenImage policy value.'
+
+                    if (Test-Path -Path $existing) {
+                        try {
+                            Remove-Item -LiteralPath $existing -Force -ErrorAction SilentlyContinue
+                            Write-Log -Level INFO -Message "Removed copied lockscreen file: $existing"
+                        }
+                        catch {
+                            Write-Log -Level WARN -Message "Failed to remove lockscreen file: $_"
+                        }
+                    }
+                }
+                else {
+                    Write-Log -Level INFO -Message 'No LockScreenImage policy value present.'
+                }
+            }
+            else {
+                Write-Log -Level INFO -Message 'Personalization policy key not present.'
+            }
+        }
+        catch {
+            Write-Log -Level ERROR -Message "Failed to remove LockScreenImage: $_"
+            throw
+        }
+    }
+}
