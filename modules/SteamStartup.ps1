@@ -74,14 +74,28 @@ function Register-SteamStartupTask {
     Invoke-Action -Description "Register task '$_TaskName' → '$steamExe -bigpicture -silent' at logon (30s delay)" -ScriptBlock {
         if ($User -match '\\') { $userId = $User } else { $userId = "$env:COMPUTERNAME\$User" }
 
-        # /TR must quote the exe path when it contains spaces.
-        # /DELAY 0:30 allows the desktop shell to fully initialize before Steam launches.
-        $output = schtasks /Create /TN "$_TaskName" /TR "`"$steamExe`" -bigpicture -silent" /SC ONLOGON /DELAY 0:30 /RU "$userId" /F 2>&1
-        if ($LASTEXITCODE -eq 0) {
-            Write-Log -Level INFO -Message "Task '$_TaskName' created successfully."
-        } else {
-            Write-Log -Level ERROR -Message "schtasks.exe failed (exit $LASTEXITCODE): $($output -join ' | ')"
-            throw 'Task registration failed.'
+        # Primary: Register-ScheduledTask (handles exe paths with spaces natively)
+        try {
+            $action    = New-ScheduledTaskAction -Execute $steamExe -Argument '-bigpicture -silent'
+            $trigger   = New-ScheduledTaskTrigger -AtLogOn
+            $trigger.Delay = 'PT30S'   # ISO 8601 — 30 second delay for desktop readiness
+            $settings  = New-ScheduledTaskSettingsSet -MultipleInstances IgnoreNew
+            $principal = New-ScheduledTaskPrincipal -UserId $User -LogonType Interactive -RunLevel Limited
+            Register-ScheduledTask -TaskName $_TaskName -Action $action -Trigger $trigger `
+                -Settings $settings -Principal $principal -Force -ErrorAction Stop | Out-Null
+            Write-Log -Level INFO -Message "Task '$_TaskName' created via Register-ScheduledTask."
+        }
+        catch {
+            # Fallback: Start-Process with full ArgumentList string avoids PowerShell re-parsing nested quotes
+            Write-Log -Level WARN -Message "Register-ScheduledTask failed ($($_.Exception.Message)) — trying schtasks fallback."
+            $argStr = "/Create /TN `"$_TaskName`" /TR `"`"$steamExe`" -bigpicture -silent`" /SC ONLOGON /DELAY 0:30 /RU `"$userId`" /F"
+            $proc   = Start-Process -FilePath "$env:SystemRoot\System32\schtasks.exe" `
+                          -ArgumentList $argStr -NoNewWindow -Wait -PassThru -ErrorAction SilentlyContinue
+            if (-not $proc -or $proc.ExitCode -ne 0) {
+                Write-Log -Level ERROR -Message "schtasks fallback failed (exit $($proc.ExitCode))."
+                throw 'Task registration failed.'
+            }
+            Write-Log -Level INFO -Message "Task '$_TaskName' created via schtasks fallback."
         }
     }
 }
