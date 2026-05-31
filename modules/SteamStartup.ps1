@@ -5,9 +5,9 @@
 
 .DESCRIPTION
     Register-SteamStartupTask   : Creates a Task Scheduler job that runs
-                                  steam.exe -bigpicture -silent at logon for the
-                                  specified user, with a 30-second delay to ensure
-                                  the desktop shell is ready.
+                                  steam.exe -bigpicture at logon for the specified
+                                  user, with a 30-second delay to ensure the desktop
+                                  shell is ready.
     Unregister-SteamStartupTask : Removes the task by its canonical name.
 #>
 
@@ -71,12 +71,12 @@ function Register-SteamStartupTask {
     }
     if (-not $steamExe) { $steamExe = 'C:\Program Files (x86)\Steam\steam.exe' }
 
-    Invoke-Action -Description "Register task '$_TaskName' → '$steamExe -bigpicture -silent' at logon (30s delay)" -ScriptBlock {
+    Invoke-Action -Description "Register task '$_TaskName' → '$steamExe -bigpicture' at logon (30s delay)" -ScriptBlock {
         if ($User -match '\\') { $userId = $User } else { $userId = "$env:COMPUTERNAME\$User" }
 
         # Primary: Register-ScheduledTask (handles exe paths with spaces natively)
         try {
-            $action    = New-ScheduledTaskAction -Execute $steamExe -Argument '-bigpicture -silent'
+            $action    = New-ScheduledTaskAction -Execute $steamExe -Argument '-bigpicture'
             $trigger   = New-ScheduledTaskTrigger -AtLogOn
             $trigger.Delay = 'PT30S'   # ISO 8601 — 30 second delay for desktop readiness
             $settings  = New-ScheduledTaskSettingsSet -MultipleInstances IgnoreNew
@@ -86,9 +86,8 @@ function Register-SteamStartupTask {
             Write-Log -Level INFO -Message "Task '$_TaskName' created via Register-ScheduledTask."
         }
         catch {
-            # Fallback: Start-Process with full ArgumentList string avoids PowerShell re-parsing nested quotes
             Write-Log -Level WARN -Message "Register-ScheduledTask failed ($($_.Exception.Message)) — trying schtasks fallback."
-            $argStr = "/Create /TN `"$_TaskName`" /TR `"`"$steamExe`" -bigpicture -silent`" /SC ONLOGON /DELAY 0:30 /RU `"$userId`" /F"
+            $argStr = "/Create /TN `"$_TaskName`" /TR `"`"$steamExe`" -bigpicture`" /SC ONLOGON /DELAY 0:30 /RU `"$userId`" /F"
             $proc   = Start-Process -FilePath "$env:SystemRoot\System32\schtasks.exe" `
                           -ArgumentList $argStr -NoNewWindow -Wait -PassThru -ErrorAction SilentlyContinue
             if (-not $proc -or $proc.ExitCode -ne 0) {
