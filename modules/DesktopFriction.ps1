@@ -76,11 +76,12 @@ function Set-LockScreenWallpaper {
         Sets a custom lock screen wallpaper via the Personalization policy (LockScreenImage).
 
     .DESCRIPTION
-        Copies the provided image into C:\ProgramData\Home-WinDeck\LockScreen and sets
-        the `LockScreenImage` policy value under HKLM:\SOFTWARE\Policies\Microsoft\Windows\Personalization.
+        Copies the provided image into C:\ProgramData\Home-WinDeck\LockScreen, grants SYSTEM
+        read access (required by the logon screen process), and sets both LockScreenImage and
+        LockScreenImageStatus=1 under HKLM:\SOFTWARE\Policies\Microsoft\Windows\Personalization.
+        Also removes NoLockScreen so the wallpaper is actually visible.
 
-        This is a manual action (not performed by default) and is reversible via
-        Remove-LockScreenWallpaper. The registry key is backed up before changes.
+        Run gpupdate /force and lock (Win+L) to verify.
     #>
     [CmdletBinding()]
     param(
@@ -95,18 +96,43 @@ function Set-LockScreenWallpaper {
         return
     }
 
+    # Validate format — Windows lock screen only renders JPEG, PNG, BMP
+    $validExts = @('.jpg', '.jpeg', '.png', '.bmp')
+    $ext = [IO.Path]::GetExtension($ImagePath).ToLower()
+    if ($ext -notin $validExts) {
+        Write-Log -Level ERROR -Message "Unsupported format '$ext'. Accepted: $($validExts -join ', ')"
+        return
+    }
+
     Backup-RegistryKey -Path $_PersonalizationPath -Name 'LockScreenImage'
 
-    $destDir = $DestinationRoot
-    $ext = [IO.Path]::GetExtension($ImagePath)
+    $destDir  = $DestinationRoot
     $destFile = Join-Path $destDir ("lockscreen" + $ext)
 
-    Invoke-Action -Description "Copy image and set LockScreenImage policy to '$destFile'" -ScriptBlock {
+    Invoke-Action -Description "Copy image to '$destFile', grant SYSTEM read, apply LockScreenImage + LockScreenImageStatus=1, clear NoLockScreen" -ScriptBlock {
         try {
+            # Copy image
             if (-not (Test-Path -Path $destDir)) { New-Item -ItemType Directory -Path $destDir -Force | Out-Null }
             Copy-Item -Path $ImagePath -Destination $destFile -Force -ErrorAction Stop
-            Set-ItemProperty -Path $_PersonalizationPath -Name 'LockScreenImage' -Value $destFile -Type String -ErrorAction Stop
-            Write-Log -Level INFO -Message "Lock screen image set to $destFile. Changes take effect after policy refresh or next logon."
+
+            # Grant SYSTEM read — the logon/lock screen process runs as SYSTEM and must read the file
+            icacls $destFile /grant "NT AUTHORITY\SYSTEM:(R)" 2>&1 | Out-Null
+
+            # Ensure policy key exists
+            if (-not (Test-Path $_PersonalizationPath)) {
+                New-Item -Path $_PersonalizationPath -Force | Out-Null
+            }
+
+            # Remove NoLockScreen — if set to 1 the lock screen is bypassed entirely and the wallpaper won't show
+            Remove-ItemProperty -Path $_PersonalizationPath -Name 'NoLockScreen' -ErrorAction SilentlyContinue
+
+            # Set image path
+            Set-ItemProperty -Path $_PersonalizationPath -Name 'LockScreenImage'       -Value $destFile -Type String -ErrorAction Stop
+            # LockScreenImageStatus = 1 signals Windows that the policy is active (required)
+            Set-ItemProperty -Path $_PersonalizationPath -Name 'LockScreenImageStatus' -Value 1         -Type DWord  -ErrorAction Stop
+
+            Write-Log -Level INFO -Message "Lock screen wallpaper set: $destFile"
+            Write-Log -Level INFO -Message 'Run: gpupdate /force   then Win+L to verify.'
         }
         catch {
             Write-Log -Level ERROR -Message "Failed to set lock screen image: $_"

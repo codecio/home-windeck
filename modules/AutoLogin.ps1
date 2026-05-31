@@ -28,8 +28,10 @@ function Enable-AutoLogin {
         [string] $User
     )
 
-    if (-not $User) {
+    if (-not $User -and -not $script:DryRun) {
         $User = Read-Host 'Enter the local username for AutoLogin'
+    } elseif (-not $User) {
+        $User = '<username>'   # placeholder shown in DryRun log
     }
 
     # Validate the account exists
@@ -107,6 +109,7 @@ function Enable-AutoLogin {
                 }
                 Remove-ItemProperty -Path $_WinlogonPath -Name 'AutoLogonCount' -ErrorAction SilentlyContinue
                 Write-Log -Level INFO -Message "AutoLogin enabled for '$User'. Reboot to activate."
+                Request-Reboot -Reason 'AutoLogin changes take effect after reboot.'
             }
         }
     } else {
@@ -118,6 +121,7 @@ function Enable-AutoLogin {
             # Clear AutoLogonCount so the setting never expires
             Remove-ItemProperty -Path $key -Name 'AutoLogonCount' -ErrorAction SilentlyContinue
             Write-Log -Level INFO -Message "AutoLogin enabled for '$User'. Reboot to activate."
+            Request-Reboot -Reason 'AutoLogin changes take effect after reboot.'
         }
     }
 }
@@ -161,8 +165,9 @@ function Disable-AutoLogin {
 
     Invoke-Action -Description 'Remove AutoAdminLogon, DefaultUserName, DefaultPassword from Winlogon' -ScriptBlock {
         $key = $_WinlogonPath
-        Set-ItemProperty -Path $key -Name 'AutoAdminLogon' -Value '0' -Type String -ErrorAction SilentlyContinue
+        Set-ItemProperty    -Path $key -Name 'AutoAdminLogon'  -Value '0' -Type String -ErrorAction SilentlyContinue
         Remove-ItemProperty -Path $key -Name 'DefaultPassword'  -ErrorAction SilentlyContinue
+        Remove-ItemProperty -Path $key -Name 'DefaultUserName'  -ErrorAction SilentlyContinue
         Remove-ItemProperty -Path $key -Name 'AutoLogonCount'   -ErrorAction SilentlyContinue
         Write-Log -Level INFO -Message 'AutoLogin disabled. Manual login will be required after reboot.'
     }

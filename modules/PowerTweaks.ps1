@@ -20,67 +20,69 @@ function Enable-PowerTweaks {
     [CmdletBinding()]
     param()
 
-    # Record current active scheme
-    $timestamp = Get-Date -Format 'yyyyMMdd-HHmmss'
     $backupDir = Join-Path $script:RepoRoot 'backups'
-    if (-not (Test-Path $backupDir)) { New-Item -ItemType Directory -Path $backupDir | Out-Null }
 
-    $current = (powercfg /GetActiveScheme) 2>&1
-    # Output sample: "Power Scheme GUID: XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX  (Balanced)"
-    $match = $current -match '([0-9a-fA-F\-]{36})'
-    $currentGuid = if ($match) { $Matches[1] } else { $null }
-    if ($currentGuid) {
-        $metaFile = Join-Path $backupDir "powertweaks_${timestamp}.txt"
-        "PreviousActiveScheme=$currentGuid" | Out-File -FilePath $metaFile -Encoding ASCII
-        Write-Log -Level INFO -Message "Saved previous power scheme GUID $currentGuid → $metaFile"
-    } else {
-        Write-Log -Level WARN -Message "Could not determine current active power scheme."
+    # --- Read-only discovery (safe in DryRun) ---
+    $currentOutput = (powercfg /GetActiveScheme) 2>&1
+    $currentGuid   = if ($currentOutput -match '([0-9a-fA-F-]{36})') { $Matches[1] } else { $null }
+
+    $schemeList = (powercfg /L) 2>&1
+    $hpGuid     = $null
+    $hpLine     = $schemeList | Select-String -Pattern 'High' -SimpleMatch | Select-Object -First 1
+    if ($hpLine -and ($hpLine.Line -match '([0-9a-fA-F-]{36})')) { $hpGuid = $Matches[1] }
+
+    # --- Save current scheme for revert ---
+    Invoke-Action -Description "Save current power scheme GUID ($currentGuid) to backups/" -ScriptBlock {
+        if (-not (Test-Path $backupDir)) { New-Item -ItemType Directory -Path $backupDir | Out-Null }
+        if ($currentGuid) {
+            $metaFile = Join-Path $backupDir "powertweaks_$(Get-Date -Format 'yyyyMMdd-HHmmss').txt"
+            "PreviousActiveScheme=$currentGuid" | Out-File -FilePath $metaFile -Encoding ASCII
+            Write-Log -Level INFO -Message "Saved previous power scheme $currentGuid → $metaFile"
+        } else {
+            Write-Log -Level WARN -Message 'Could not determine current active power scheme; backup skipped.'
+        }
     }
 
-    # Find a High Performance scheme if present
-    $list = (powercfg /L) 2>&1
-    $hpMatch = ($list | Select-String -Pattern 'High' -SimpleMatch | Select-Object -First 1)
-    if ($hpMatch) {
-        if ($hpMatch -match '([0-9a-fA-F\-]{36})') { $hpGuid = $Matches[1] }
-    }
-
-    # If no HP scheme, duplicate Balanced and rename
+    # --- Create Home-WinDeck scheme if no High Performance variant exists ---
     if (-not $hpGuid) {
-        Write-Log -Level INFO -Message 'High Performance scheme not found — duplicating Balanced scheme.'
-        # Balanced GUID is commonly 381b4222-f694-41f0-9685-ff5bb260df2e
-        $balanced = ($list | Select-String -Pattern 'Balanced' -SimpleMatch | Select-Object -First 1)
-        if ($balanced -and $balanced -match '([0-9a-fA-F\-]{36})') { $balGuid = $Matches[1] } else { $balGuid = '381b4222-f694-41f0-9685-ff5bb260df2e' }
-        $dup = (powercfg -duplicatescheme $balGuid) 2>&1
-        if ($dup -match '([0-9a-fA-F\-]{36})') { $hpGuid = $Matches[1] }
-        if ($hpGuid) { powercfg -changename $hpGuid "SteamConsole-HighPerformance" | Out-Null }
+        Invoke-Action -Description "Duplicate Balanced scheme as 'Home-WinDeck-HighPerformance'" -ScriptBlock {
+            $balLine = $schemeList | Select-String -Pattern 'Balanced' -SimpleMatch | Select-Object -First 1
+            $balGuid = if ($balLine -and ($balLine.Line -match '([0-9a-fA-F-]{36})')) { $Matches[1] } else { '381b4222-f694-41f0-9685-ff5bb260df2e' }
+            $dupOutput = (powercfg -duplicatescheme $balGuid) 2>&1
+            if ($dupOutput -match '([0-9a-fA-F-]{36})') {
+                $script:_pendingHpGuid = $Matches[1]
+                powercfg -changename $script:_pendingHpGuid 'Home-WinDeck-HighPerformance' | Out-Null
+                Write-Log -Level INFO -Message "Created 'Home-WinDeck-HighPerformance' scheme ($script:_pendingHpGuid)."
+            } else {
+                Write-Log -Level ERROR -Message "Failed to duplicate Balanced scheme: $dupOutput"
+                throw 'Power scheme creation failed.'
+            }
+        }
+        # Pull GUID out of script scope after Invoke-Action
+        if (Get-Variable -Name _pendingHpGuid -Scope Script -ErrorAction SilentlyContinue) {
+            $hpGuid = $script:_pendingHpGuid
+            Remove-Variable -Name _pendingHpGuid -Scope Script -ErrorAction SilentlyContinue
+        }
     }
 
-    if (-not $hpGuid) {
-        Write-Log -Level ERROR -Message 'Failed to determine or create a High Performance power scheme.'
-        return
-    }
+    # --- Activate scheme and configure timeouts ---
+    Invoke-Action -Description "Activate 'Home-WinDeck-HighPerformance' scheme; disable hibernate; set never-sleep/display-off (AC+DC)" -ScriptBlock {
+        if (-not $hpGuid) {
+            Write-Log -Level WARN -Message 'No scheme GUID available; skipping activation.'
+            return
+        }
 
-    # Activate scheme
-    powercfg -setactive $hpGuid | Out-Null
-    Write-Log -Level INFO -Message "Activated power scheme $hpGuid"
+        powercfg -setactive $hpGuid | Out-Null
+        Write-Log -Level INFO -Message "Activated power scheme $hpGuid."
 
-    # Disable hibernation
-    try {
         powercfg -h off | Out-Null
         Write-Log -Level INFO -Message 'Disabled hibernation.'
-    } catch {
-        Write-Log -Level WARN -Message "Unable to disable hibernation: $_"
-    }
 
-    # Set display and sleep to never (0 = never)
-    try {
         powercfg /change monitor-timeout-ac 0 | Out-Null
         powercfg /change monitor-timeout-dc 0 | Out-Null
-        powercfg /change standby-timeout-ac 0 | Out-Null
-        powercfg /change standby-timeout-dc 0 | Out-Null
+        powercfg /change standby-timeout-ac  0 | Out-Null
+        powercfg /change standby-timeout-dc  0 | Out-Null
         Write-Log -Level INFO -Message 'Set display and sleep timeouts to never (AC/DC).'
-    } catch {
-        Write-Log -Level WARN -Message "Failed to set timeouts: $_"
     }
 }
 
@@ -93,28 +95,28 @@ function Disable-PowerTweaks {
     param()
 
     $backupDir = Join-Path $script:RepoRoot 'backups'
-    $meta = Get-ChildItem -Path $backupDir -Filter 'powertweaks_*.txt' | Sort-Object LastWriteTime -Descending | Select-Object -First 1
-    if (-not $meta) {
-        Write-Log -Level WARN -Message 'No powertweaks backup found — cannot restore previous scheme automatically.'
-    } else {
-        $content = Get-Content -Path $meta.FullName -ErrorAction SilentlyContinue
-        foreach ($line in $content) {
-            if ($line -match '^PreviousActiveScheme=(?<g>[0-9a-fA-F\-]{36})') {
-                $prev = $Matches['g']
-                try {
-                    powercfg -setactive $prev | Out-Null
-                    Write-Log -Level INFO -Message "Restored previous power scheme $prev from $($meta.Name)."
-                } catch {
-                    Write-Log -Level WARN -Message ("Failed to restore previous scheme {0}: {1}" -f $prev, $_)
-                }
+    $prev      = $null
+
+    if (Test-Path $backupDir) {
+        $meta = Get-ChildItem -Path $backupDir -Filter 'powertweaks_*.txt' -ErrorAction SilentlyContinue |
+                Sort-Object LastWriteTime -Descending | Select-Object -First 1
+        if ($meta) {
+            foreach ($line in (Get-Content -Path $meta.FullName -ErrorAction SilentlyContinue)) {
+                if ($line -match '^PreviousActiveScheme=(?<g>[0-9a-fA-F-]{36})') { $prev = $Matches['g'] }
             }
         }
     }
 
-    try {
+    Invoke-Action -Description "Restore power scheme $(if ($prev) { $prev } else { '(Balanced default)' }) and re-enable hibernation" -ScriptBlock {
+        if ($prev) {
+            powercfg -setactive $prev | Out-Null
+            Write-Log -Level INFO -Message "Restored power scheme $prev."
+        } else {
+            Write-Log -Level WARN -Message 'No powertweaks backup found — activating Windows Balanced scheme.'
+            powercfg -setactive '381b4222-f694-41f0-9685-ff5bb260df2e' | Out-Null
+        }
+
         powercfg -h on | Out-Null
         Write-Log -Level INFO -Message 'Re-enabled hibernation.'
-    } catch {
-        Write-Log -Level WARN -Message "Unable to re-enable hibernation: $_"
     }
 }

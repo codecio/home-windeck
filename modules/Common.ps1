@@ -30,9 +30,10 @@ SCRIPT-SCOPE STATE (set by Setup-SteamConsole.ps1 before dot-sourcing modules)
 
 #region ── Internal defaults (overridden by Setup-SteamConsole.ps1) ─────────────
 
-if (-not (Get-Variable -Scope Script -Name DryRun   -ErrorAction SilentlyContinue)) { $script:DryRun   = $false }
-if (-not (Get-Variable -Scope Script -Name LogFile  -ErrorAction SilentlyContinue)) { $script:LogFile  = $null  }
-if (-not (Get-Variable -Scope Script -Name RepoRoot -ErrorAction SilentlyContinue)) {
+if (-not (Get-Variable -Scope Script -Name DryRun         -ErrorAction SilentlyContinue)) { $script:DryRun         = $false }
+if (-not (Get-Variable -Scope Script -Name LogFile        -ErrorAction SilentlyContinue)) { $script:LogFile        = $null  }
+if (-not (Get-Variable -Scope Script -Name RebootRequired -ErrorAction SilentlyContinue)) { $script:RebootRequired = $false }
+if (-not (Get-Variable -Scope Script -Name RepoRoot       -ErrorAction SilentlyContinue)) {
     $script:RepoRoot = Split-Path -Parent $PSScriptRoot
 }
 
@@ -176,6 +177,22 @@ function Backup-RegistryKey {
     if ($LASTEXITCODE -ne 0) {
         Write-Log -Level WARN -Message "Registry export returned exit code $LASTEXITCODE. Details: $result"
     }
+}
+
+#endregion
+
+#region ── Request-Reboot ───────────────────────────────────────────────────────
+
+function Request-Reboot {
+    <#
+    .SYNOPSIS
+        Flags that a reboot is required. Displayed in the final summary.
+    .PARAMETER Reason
+        Short explanation shown in the log.
+    #>
+    param([string] $Reason = 'A module requires a reboot.')
+    if (-not $script:DryRun) { $script:RebootRequired = $true }
+    Write-Log -Level WARN -Message "Reboot required: $Reason"
 }
 
 #endregion

@@ -189,6 +189,12 @@ if (-not $Revert -and $PSBoundParameters.ContainsKey('Wallpaper') -and $Wallpape
     }
 
     Write-Log -Level INFO -Message "Continuing with remaining modules: $($selectedModules -join ', ')"
+
+    if ($selectedModules.Count -eq 0) {
+        Write-Log -Level INFO -Message 'No modules remaining after wallpaper setup. Done.'
+        Stop-Transcript -ErrorAction SilentlyContinue | Out-Null
+        exit 0
+    }
 }
 
 #endregion
@@ -242,6 +248,10 @@ if ($failCount -gt 0) {
     Write-Log -Level ERROR -Message "$failCount module(s) failed. Review errors above."
 } else {
     Write-Log -Level INFO -Message 'All modules completed successfully.'
+}
+
+if ($script:RebootRequired) {
+    Write-Log -Level WARN -Message '*** Reboot required — run: Restart-Computer ***'
 }
 
 Stop-Transcript -ErrorAction SilentlyContinue | Out-Null

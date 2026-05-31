@@ -55,6 +55,7 @@ function Install-NvidiaDriver {
         $ok = Invoke-Winget -Arguments @('install', '--id', $_NvidiaPackageId, '--silent')
         if ($ok) {
             Write-Log -Level INFO -Message 'NVIDIA driver installed. A reboot may be required.'
+            Request-Reboot -Reason 'NVIDIA driver install requires a reboot.'
         } else {
             Write-Log -Level ERROR -Message 'NVIDIA driver installation failed. Check winget output above.'
         }
