@@ -10,7 +10,7 @@
     Unregister-SteamStartupTask : Removes the task by its canonical name.
 #>
 
-$_TaskName = 'SteamConsoleSetup-BigPictureAutostart'
+$_TaskName = 'Home-WinDeck-BigPictureAutostart'
 
 function _Find-SteamExe {
     # Prefer registry lookup; fall back to default install path
