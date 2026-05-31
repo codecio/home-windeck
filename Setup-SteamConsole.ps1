@@ -204,7 +204,7 @@ if (-not $Revert -and $PSBoundParameters.ContainsKey('Wallpaper') -and $Wallpape
 $dispatch = @{
     AutoLogin      = @{ Enable = { Enable-AutoLogin     -User $User };    Disable = { Disable-AutoLogin } }
     SteamInstall   = @{ Enable = { Install-Steam };                       Disable = { Uninstall-Steam   } }
-    SteamStartup   = @{ Enable = { Register-SteamStartupTask -User $User }; Disable = { Unregister-SteamStartupTask } }
+    SteamStartup   = @{ Enable = { Register-SteamStartupTask -User $User }; Disable = { Unregister-SteamStartupTask -User $User } }
     NvidiaDriver   = @{ Enable = { Install-NvidiaDriver -Yes:$Yes };      Disable = { Uninstall-NvidiaDriver } }
     DesktopFriction= @{ Enable = { Disable-LockScreen };                  Disable = { Enable-LockScreen  } }
     PowerTweaks     = @{ Enable = { Enable-PowerTweaks };                  Disable = { Disable-PowerTweaks } }

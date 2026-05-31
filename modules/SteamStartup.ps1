@@ -62,14 +62,24 @@ function Register-SteamStartupTask {
     }
 
     # Set Steam's own StartupMode = 7 (Big Picture).
-    # This is the most reliable method — Steam reads this on every launch and
-    # overrides whatever command-line flags are passed.
-    Invoke-Action -Description "Set Steam StartupMode=7 (Big Picture) in HKCU registry" -ScriptBlock {
-        if (-not (Test-Path $_SteamUserRegPath)) {
-            New-Item -Path $_SteamUserRegPath -Force | Out-Null
+    # IMPORTANT: must write to the target USER's hive (HKU\<SID>), not HKCU —
+    # when running as Administrator, HKCU points to the admin's hive, not $User's.
+    Invoke-Action -Description "Set Steam StartupMode=7 (Big Picture) in $User's registry hive" -ScriptBlock {
+        try {
+            $sid      = (Get-LocalUser -Name $User -ErrorAction Stop).SID.Value
+            $hivePath = "Registry::HKEY_USERS\$sid\SOFTWARE\Valve\Steam"
+            if (-not (Test-Path $hivePath)) {
+                New-Item -Path $hivePath -Force | Out-Null
+            }
+            Set-ItemProperty -Path $hivePath -Name 'StartupMode' -Value 7 -Type DWord -ErrorAction Stop
+            Write-Log -Level INFO -Message "Steam StartupMode set to 7 (Big Picture) in $User's hive (SID: $sid)."
         }
-        Set-ItemProperty -Path $_SteamUserRegPath -Name 'StartupMode' -Value 7 -Type DWord
-        Write-Log -Level INFO -Message "Steam StartupMode set to 7 (Big Picture)."
+        catch {
+            Write-Log -Level WARN -Message "Could not write to $User hive directly: $_. Falling back to HKCU (only works if running as $User)."
+            if (-not (Test-Path $_SteamUserRegPath)) { New-Item -Path $_SteamUserRegPath -Force | Out-Null }
+            Set-ItemProperty -Path $_SteamUserRegPath -Name 'StartupMode' -Value 7 -Type DWord
+            Write-Log -Level INFO -Message "Steam StartupMode set to 7 via HKCU fallback."
+        }
     }
 
     # Remove Steam's own Run-key autostart — it launches steam.exe with no flags
@@ -125,7 +135,9 @@ function Unregister-SteamStartupTask {
         Removes the Steam Big Picture startup task and restores normal Steam startup mode.
     #>
     [CmdletBinding()]
-    param()
+    param(
+        [string] $User = $env:USERNAME
+    )
 
     Invoke-Action -Description "Unregister task '$_TaskName'" -ScriptBlock {
         $existing = Get-ScheduledTask -TaskName $_TaskName -ErrorAction SilentlyContinue
@@ -138,10 +150,20 @@ function Unregister-SteamStartupTask {
     }
 
     # Restore Steam to normal/desktop startup mode
-    Invoke-Action -Description "Restore Steam StartupMode=0 (normal desktop mode)" -ScriptBlock {
-        if (Test-Path $_SteamUserRegPath) {
-            Set-ItemProperty -Path $_SteamUserRegPath -Name 'StartupMode' -Value 0 -Type DWord
-            Write-Log -Level INFO -Message "Steam StartupMode restored to 0 (desktop mode)."
+    Invoke-Action -Description "Restore Steam StartupMode=0 (normal desktop mode) in $User's registry hive" -ScriptBlock {
+        try {
+            $sid      = (Get-LocalUser -Name $User -ErrorAction Stop).SID.Value
+            $hivePath = "Registry::HKEY_USERS\$sid\SOFTWARE\Valve\Steam"
+            if (Test-Path $hivePath) {
+                Set-ItemProperty -Path $hivePath -Name 'StartupMode' -Value 0 -Type DWord -ErrorAction Stop
+                Write-Log -Level INFO -Message "Steam StartupMode restored to 0 (desktop mode) in $User's hive."
+            }
+        }
+        catch {
+            Write-Log -Level WARN -Message "Could not restore StartupMode in $User hive: $_"
+            if (Test-Path $_SteamUserRegPath) {
+                Set-ItemProperty -Path $_SteamUserRegPath -Name 'StartupMode' -Value 0 -Type DWord
+            }
         }
     }
 }
