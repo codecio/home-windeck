@@ -116,7 +116,7 @@ function Set-LockScreenWallpaper {
             Copy-Item -Path $ImagePath -Destination $destFile -Force -ErrorAction Stop
 
             # Grant SYSTEM read — the logon/lock screen process runs as SYSTEM and must read the file
-            icacls $destFile /grant "NT AUTHORITY\SYSTEM:(R)" 2>&1 | Out-Null
+            icacls "$destFile" /grant "NT AUTHORITY\SYSTEM:(R)" 2>&1 | Out-Null
 
             # Ensure policy key exists
             if (-not (Test-Path $_PersonalizationPath)) {

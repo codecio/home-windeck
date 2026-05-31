@@ -22,7 +22,7 @@
 
 .PARAMETER Modules
     Comma-separated list of modules to act on.
-    Valid values: AutoLogin, SteamInstall, SteamStartup, NvidiaDriver, DesktopFriction
+    Valid values: AutoLogin, SteamInstall, SteamStartup, NvidiaDriver, DesktopFriction, PowerTweaks
     Default (when -Install): AutoLogin, SteamInstall, SteamStartup, DesktopFriction
     NvidiaDriver is opt-in due to download size and hardware specificity.
 
@@ -166,7 +166,7 @@ if (-not $Revert -and $PSBoundParameters.ContainsKey('Wallpaper') -and $Wallpape
     # Prevent the main loop from flipping NoLockScreen back to '1' by removing DesktopFriction
     if ($selectedModules -contains 'DesktopFriction') {
         Write-Log -Level WARN -Message "Removing DesktopFriction from module list to avoid conflicting NoLockScreen changes when applying wallpaper."
-        $selectedModules = $selectedModules | Where-Object { $_ -ne 'DesktopFriction' }
+        $selectedModules = @($selectedModules | Where-Object { $_ -ne 'DesktopFriction' })
     }
 
     try {

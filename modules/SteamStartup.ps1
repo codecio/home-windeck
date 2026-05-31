@@ -80,7 +80,7 @@ function Register-SteamStartupTask {
             $trigger   = New-ScheduledTaskTrigger -AtLogOn
             $trigger.Delay = 'PT30S'   # ISO 8601 — 30 second delay for desktop readiness
             $settings  = New-ScheduledTaskSettingsSet -MultipleInstances IgnoreNew
-            $principal = New-ScheduledTaskPrincipal -UserId $User -LogonType Interactive -RunLevel Limited
+            $principal = New-ScheduledTaskPrincipal -UserId $userId -LogonType Interactive -RunLevel Limited
             Register-ScheduledTask -TaskName $_TaskName -Action $action -Trigger $trigger `
                 -Settings $settings -Principal $principal -Force -ErrorAction Stop | Out-Null
             Write-Log -Level INFO -Message "Task '$_TaskName' created via Register-ScheduledTask."
