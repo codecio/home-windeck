@@ -75,8 +75,8 @@ function Register-SteamStartupTask {
     # Remove Steam's own Run-key autostart — it launches steam.exe with no flags
     # (normal/desktop mode) and races with our scheduled task.
     Invoke-Action -Description "Remove Steam self-registered Run key autostart (prevents normal-mode race)" -ScriptBlock {
-        $steamRunValue = (Get-ItemProperty -Path $_SteamRunKey -ErrorAction SilentlyContinue).Steam
-        if ($steamRunValue) {
+        $steamRunProp = Get-ItemProperty -Path $_SteamRunKey -Name 'Steam' -ErrorAction SilentlyContinue
+        if ($steamRunProp) {
             Remove-ItemProperty -Path $_SteamRunKey -Name 'Steam' -ErrorAction SilentlyContinue
             Write-Log -Level INFO -Message "Removed Steam Run key autostart entry."
         } else {

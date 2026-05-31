@@ -50,6 +50,10 @@ function Enable-AutoLogin {
         $password = Read-Host "Enter password for '$User' (will be stored securely with Autologon if available, otherwise in registry)" -AsSecureString
         $plainPw  = [System.Runtime.InteropServices.Marshal]::PtrToStringAuto(
                         [System.Runtime.InteropServices.Marshal]::SecureStringToBSTR($password))
+        if ([string]::IsNullOrEmpty($plainPw)) {
+            Write-Log -Level ERROR -Message 'Password cannot be empty. AutoLogin requires a password.'
+            return
+        }
     }
 
     Backup-RegistryKey -Path $_WinlogonPath -Name 'Winlogon'
