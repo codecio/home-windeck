@@ -61,27 +61,18 @@ function Register-SteamStartupTask {
     if (-not $steamExe) { $steamExe = 'C:\Program Files (x86)\Steam\steam.exe' }
 
     Invoke-Action -Description "Register scheduled task '$_TaskName' for user '$User' (steam.exe -bigpicture -silent)" -ScriptBlock {
-        # Use schtasks.exe to create the task (portable and avoids Register-ScheduledTask parameter issues)
-        $tr = "`"$steamExe`" -bigpicture -silent"
         if ($User -match '\\') { $userId = $User } else { $userId = "$env:COMPUTERNAME\$User" }
 
-        # Build a single argument string to preserve the /TR value with inner quotes
-        $trQuoted = '"' + $steamExe + ' -bigpicture -silent' + '"'
-        $argString = "/Create /TN `"$($_TaskName)`" /TR $trQuoted /SC ONLOGON /RU `"$userId`" /F"
-
-        $proc = Start-Process -FilePath 'schtasks.exe' -ArgumentList $argString -NoNewWindow -Wait -PassThru -ErrorAction SilentlyContinue
-        if ($proc -and $proc.ExitCode -eq 0) {
-            Write-Log -Level INFO -Message "Scheduled task '$_TaskName' created via schtasks.exe."
+        # /TR must quote the exe path separately when it contains spaces, e.g.:
+        #   "C:\Program Files (x86)\Steam\steam.exe" -bigpicture -silent
+        # PowerShell passes the string after the outer quotes are stripped, so the inner
+        # escaped quotes reach schtasks.exe as literal " characters — which is correct.
+        $output = schtasks /Create /TN "$_TaskName" /TR "`"$steamExe`" -bigpicture -silent" /SC ONLOGON /RU "$userId" /F 2>&1
+        if ($LASTEXITCODE -eq 0) {
+            Write-Log -Level INFO -Message "Scheduled task '$_TaskName' created successfully."
         } else {
-            # Attempt to capture standard output by running schtasks synchronously with & and redirecting
-            try {
-                $output = schtasks.exe /Create /TN "$_TaskName" /TR "$steamExe -bigpicture -silent" /SC ONLOGON /RU "$userId" /F 2>&1
-            } catch {
-                $output = "schtasks invocation failed"
-            }
-            $out = if ($proc) { "ExitCode=$($proc.ExitCode); Output=$($output -join ' | ')" } else { "Start-Process failed; Output=$($output -join ' | ')" }
-            Write-Log -Level ERROR -Message "schtasks.exe failed to create task: $out"
-            throw
+            Write-Log -Level ERROR -Message "schtasks.exe failed (exit $LASTEXITCODE): $($output -join ' | ')"
+            throw "Task registration failed."
         }
     }
 }

@@ -92,8 +92,8 @@ function Enable-AutoLogin {
             if ($script:DryRun) {
                 Write-Log -Level DRY -Message "WOULD: Run $autologonPath /accepteula $User $env:COMPUTERNAME <password hidden>"
             } else {
-                $args = @('/accepteula', $User, $env:COMPUTERNAME, $plainPw)
-                $proc = Start-Process -FilePath $autologonPath -ArgumentList $args -NoNewWindow -Wait -PassThru -ErrorAction SilentlyContinue
+                $autologonArgs = @('/accepteula', $User, $env:COMPUTERNAME, $plainPw)
+                $proc = Start-Process -FilePath $autologonPath -ArgumentList $autologonArgs -NoNewWindow -Wait -PassThru -ErrorAction SilentlyContinue
                 if ($proc -and $proc.ExitCode -eq 0) {
                     Write-Log -Level INFO -Message "Autologon configured via Autologon.exe; credentials stored as LSA secret."
                     # Ensure AutoAdminLogon and DefaultUserName set (Autologon may set these itself)
